@@ -1,0 +1,662 @@
+{
+  "project": {
+    "id": "EXIT-MODELER",
+    "name": "Exit Modeler (SaaS Profit & Exit Calculator)",
+    "vision": "Give founders and operators a single-page, simulation-grade console to model growth, churn, pricing, expenses, profit taking, and valuation; run Monte Carlo instantly; and make disciplined, rules-based decisions on when to sell.",
+    "objectives": [
+      {
+        "id": "OBJ-001",
+        "description": "Enable accurate forward simulations of MRR/ARR under uncertainty (variance + churn + pricing).",
+        "metrics": [
+          { "name": "Simulation runtime (p95)", "target": "< 250ms for 10k trials" },
+          { "name": "Scenario parity vs reference model", "target": "±2% error on test corpus" }
+        ]
+      },
+      {
+        "id": "OBJ-002",
+        "description": "Provide policy-driven sell/hold guidance tied to milestone targets and trend adherence.",
+        "metrics": [
+          { "name": "Users applying decision policy", "target": "70% of active users" },
+          { "name": "Backtest hit-rate on policy triggers", "target": ">= 80% consistency vs replay" }
+        ]
+      },
+      {
+        "id": "OBJ-003",
+        "description": "Deliver a frictionless SPA with no persistence, but with export/import of settings.",
+        "metrics": [
+          { "name": "Bundle size (gz)", "target": "< 350KB" },
+          { "name": "TTI on mid-range laptop", "target": "< 1.0s" }
+        ]
+      }
+    ],
+    "stakeholders": [
+      {
+        "role": "Product Lead",
+        "name": "Matthew Marshall",
+        "responsibilities": [
+          "Own product strategy and milestone policy framework",
+          "Approve feature acceptance criteria"
+        ]
+      },
+      {
+        "role": "Architecture Lead",
+        "name": "TBD",
+        "responsibilities": [
+          "Choose client runtime and math engines",
+          "Own security/performance tradeoffs"
+        ]
+      }
+    ],
+    "roadmap": [
+      { "release": "R1", "theme": "MVP SPA with Monte Carlo + core charts", "target_date": "2026-01-15", "notes": "No auth; local-only settings, export/import JSON" },
+      { "release": "R2", "theme": "Decision policy & milestone guidance", "target_date": "2026-02-28", "notes": "Policy editor + backtesting" },
+      { "release": "R3", "theme": "Sensitivity & tornado charts", "target_date": "2026-03-31", "notes": "Drivers analysis + scenario pins" }
+    ],
+    "changelog": []
+  },
+  "tooling": {
+    "id": "exit-modeler",
+    "version": "0.3.0",
+    "notes": "Local-first SPA; Monte Carlo runs in browser via Web Workers.",
+    "repository": { "url": "https://example.com/exit-modeler", "default_branch": "main", "tag_prefix": "v" },
+    "components": {
+      "frontend": { "description": "SPA (Svelte/React or similar) + state machine", "version": "0.3.0" },
+      "simulation": { "description": "Monte Carlo core + RNG + distributions", "version": "0.3.0" },
+      "charts": { "description": "Time-series, fan charts & histograms", "version": "0.3.0" }
+    }
+  },
+  "glossary": {
+    "version": 5,
+    "terms": [
+      { "id": "TERM-MRR", "term": "MRR", "definition": "Monthly Recurring Revenue for current month.", "tags": ["finance","revenue"], "owner": "Product", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-ARR", "term": "ARR", "definition": "Annual Recurring Revenue: MRR × 12.", "tags": ["finance","revenue"], "owner": "Product", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-ARPU", "term": "ARPU", "definition": "Average Revenue Per User per month.", "tags": ["pricing"], "owner": "Analytics", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-ARPPU", "term": "ARPPU", "definition": "Average Revenue Per Paying User.", "tags": ["pricing"], "owner": "Analytics", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-CHURN", "term": "Churn", "definition": "Rate of customer or revenue loss in a period; modeled as a distribution with drift/variance.", "tags": ["retention"], "owner": "Analytics", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-NRR", "term": "Net Revenue Retention (NRR)", "definition": "Expansion + reactivation − contraction − churn, over a period.", "tags": ["retention","growth"], "owner": "Analytics", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-GRR", "term": "Gross Revenue Retention (GRR)", "definition": "Revenue retained excluding expansion.", "tags": ["retention"], "owner": "Analytics", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-GM", "term": "Gross Margin", "definition": "(Revenue − COGS) ÷ Revenue.", "tags": ["finance"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-OPEX", "term": "Opex", "definition": "Operating expenses applied monthly as % of revenue.", "tags": ["finance"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-CAPEX", "term": "Capex", "definition": "Capital expenditures modeled as % of revenue or fixed schedule.", "tags": ["finance"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-PROF", "term": "Profit Take", "definition": "Portion of operating profit siphoned to savings/treasury each month.", "tags": ["cashflow"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-MULT", "term": "Valuation Multiplier", "definition": "ARR multiple (point or distribution) used to estimate enterprise value.", "tags": ["valuation"], "owner": "Product", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-HAIRCUT", "term": "Valuation Haircut/Spread", "definition": "Discount or dispersion applied to baseline multiple to capture negotiation risk.", "tags": ["valuation"], "owner": "Product", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-CAGR", "term": "CAGR", "definition": "Compound Annual Growth Rate over multi-period horizon.", "tags": ["growth"], "owner": "Analytics", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-IRR", "term": "IRR", "definition": "Internal Rate of Return; optional investor-centric metric not shown by default.", "tags": ["finance"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-BURN", "term": "Burn", "definition": "Net cash outflow per month.", "tags": ["cashflow"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-RUNWAY", "term": "Runway", "definition": "Months until cash exhaustion at current burn.", "tags": ["cashflow"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-FANCHART", "term": "Fan Chart", "definition": "Central path with percentile bands across time.", "tags": ["viz"], "owner": "Product", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-BANDS", "term": "Percentile Bands", "definition": "50/80/95% intervals around median path.", "tags": ["viz"], "owner": "Product", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-RNG", "term": "Seeded RNG", "definition": "Random number generator with seed for reproducibility.", "tags": ["simulation"], "owner": "Engineering", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-LOGNORMAL", "term": "Lognormal Distribution", "definition": "Positive-only distribution for growth/ARPU under multiplicative effects.", "tags": ["stats"], "owner": "Engineering", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-BETA", "term": "Beta Distribution", "definition": "Bounded [0,1] distribution, suitable for churn rates.", "tags": ["stats"], "owner": "Engineering", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-TRI", "term": "Triangular Distribution", "definition": "Simple min–mode–max distribution for expert estimates.", "tags": ["stats"], "owner": "Engineering", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-DRIFT", "term": "Drift", "definition": "Systematic monthly tendency (e.g., growth mean) that can change over time.", "tags": ["stats"], "owner": "Engineering", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-VOL", "term": "Volatility (σ)", "definition": "Spread of outcomes for a distribution.", "tags": ["stats"], "owner": "Engineering", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-POLICY", "term": "Sell/Hold Policy", "definition": "Decision rule tied to milestones and adherence to a required path with tolerance band.", "tags": ["governance"], "owner": "Product", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-REQPATH", "term": "Required Path", "definition": "Smoothed target curve constructed from user monthly set points.", "tags": ["policy"], "owner": "Product", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-POLICYBAND", "term": "Policy Band", "definition": "±% tolerance around required path; falling below band can trigger SELL.", "tags": ["policy"], "owner": "Product", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-SMOOTH", "term": "Smoothing", "definition": "Piecewise smoothing between monthly set points (e.g., monotone cubic or linear).", "tags": ["modeling"], "owner": "Engineering", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-TORNADO", "term": "Tornado Chart", "definition": "Ranked sensitivity bars showing drivers of outcome variance.", "tags": ["analytics"], "owner": "Analytics", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-BACKTEST", "term": "Backtesting", "definition": "Replay using historical inputs to evaluate policy and fit parameters.", "tags": ["analytics"], "owner": "Analytics", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-MILELOG", "term": "Log-Scale Milestone Slider", "definition": "A logarithmic slider used for large-range monetary thresholds (e.g., $1M–$10B) with precise numeric entry.", "tags": ["ux","viz"], "owner": "Product", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-IPO", "term": "IPO", "definition": "Initial Public Offering; part of equity is sold for cash while remaining equity becomes publicly tradable (often subject to lockups).", "tags": ["valuation","equity"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-FOUNDKEEP", "term": "Founder Keep Percentage", "definition": "For M&A, portion of net sale proceeds allocated to the founder at close after taxes and holdbacks.", "tags": ["valuation","equity"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-OBLIG", "term": "Obligations/Retention Percentage", "definition": "For M&A, portion of net sale proceeds reserved for investor paybacks, debt payoff, or retention/bonus pools at close.", "tags": ["valuation","equity"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-SELLDOWN", "term": "IPO Sell-Down Percentage", "definition": "Portion of total company equity the founder sells for cash at IPO pricing.", "tags": ["valuation","equity"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-CAC", "term": "Customer Acquisition Cost (CAC)", "definition": "Average fully-loaded cost to acquire a customer.", "tags": ["unit economics"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-LTV", "term": "Lifetime Value (LTV)", "definition": "Estimated gross profit per customer before overhead: LTV ≈ ARPU × GM / churn.", "tags": ["unit economics"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-PAYBACK", "term": "Payback Period", "definition": "Months to recover CAC: CAC / (ARPU × GM).", "tags": ["unit economics"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-TXCOST", "term": "Transaction Costs", "definition": "Bankers, legal, diligence, and other fees as % of EV.", "tags": ["M&A"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-WCA", "term": "Working Capital Adjustment", "definition": "Closing-day adjustment to reflect normalized working capital vs target; can be positive or negative.", "tags": ["M&A"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-ESCROW", "term": "Escrow", "definition": "Portion of purchase price held back at close and released over time.", "tags": ["M&A"], "owner": "Finance", "last_reviewed": "2025-10-20" },
+      { "id": "TERM-EARNOUT", "term": "Earn-out", "definition": "Contingent payment based on future performance; modeled by expected value and release schedule.", "tags": ["M&A"], "owner": "Finance", "last_reviewed": "2025-10-20" }
+    ]
+  },
+  "architecture": {
+    "context": {
+      "system_name": "Exit Modeler SPA",
+      "summary": "Client-only single page app executing Monte Carlo simulations and rendering charts. No backend, no auth. Optional external feeds later.",
+      "actors": [
+        {
+          "name": "Founder/Operator",
+          "interactions": [
+            "Configures parameters and milestones",
+            "Auto-runs simulations and reads charts",
+            "Uses policy band guidance to decide sell/hold"
+          ]
+        },
+        {
+          "name": "Simulation Engine",
+          "interactions": [
+            "Executes N trials of monthly projections",
+            "Evaluates decision policy vs required path band",
+            "Aggregates ARR/MRR and valuation distributions"
+          ]
+        }
+      ],
+      "environments": [
+        { "name": "Browser (Primary)", "description": "Modern desktop browser with Web Workers; optional WASM for math." },
+        { "name": "Node (Dev/Test)", "description": "Node harness for deterministic replay and CI tests." }
+      ]
+    },
+    "decisions": [
+      { "id": "ADR-0001", "title": "Client-only SPA with Web Workers", "status": "accepted", "date": "2025-10-20", "context": "Instant feedback, zero PII retention.", "decision": "All simulations client-side; no server in MVP.", "consequences": ["Fast UX; no data custody", "Optimize bundle & worker payload"] },
+      { "id": "ADR-0002", "title": "Distribution Modeling", "status": "accepted", "date": "2025-10-20", "context": "Realistic variance for growth/churn/ARPU.", "decision": "Support Normal, Lognormal, Beta, Triangular; pluggable RNG.", "consequences": ["Realism + small complexity", "Document defaults & guardrails"] },
+      { "id": "ADR-0003", "title": "Required Path Construction", "status": "accepted", "date": "2025-10-20", "context": "User wants monthly set points and smoothing.", "decision": "Piecewise smoothing between monthly set points; monotone cubic or piecewise-linear with shape-preserving option.", "consequences": ["Intuitive curve editing", "Deterministic interpolation; easy banding"] },
+      { "id": "ADR-0004", "title": "Offline-first PWA, Single-Page, Local-Only", "status": "accepted", "date": "2025-10-20", "context": "User requires a single page app that runs entirely locally.", "decision": "Package as a PWA; cache all assets; no network calls; simulations and charts run in-browser (Web Workers); settings export/import only.", "consequences": ["Instant load after first visit; zero data custody risk", "No server features (auth, multiuser) in MVP"] }
+    ],
+    "diagrams": [
+      { "id": "DIA-CTX-01", "type": "c4-context", "source": "C4: Browser SPA -> Web Worker -> Charts; Optional: External pricing feed.", "description": "High-level context showing client-only flow." }
+    ]
+  },
+  "requirements": {
+    "brd": {
+      "id": "BRD-EXIT-001",
+      "audience": "Founders, operators, fractional CFOs, indie hackers",
+      "opportunity": "Most calculators are static; few combine stochastic modeling with disciplined sell/hold policy and milestone targeting.",
+      "value_metrics": [
+        { "metric": "Time-to-answer (median)", "target": "< 5 seconds for new users" },
+        { "metric": "Decision confidence uplift", "target": "+25% vs baseline survey" }
+      ],
+      "assumptions": [
+        "Users can estimate coarse ranges for growth/churn/ARPU",
+        "Valuation ~ ARR × multiplier with optional haircut/spread"
+      ],
+      "risks": ["Users misinterpret distributions or overfit", "Misuse as financial advice"],
+      "mitigations": ["Tooltips and presets", "Clear disclaimers and labeled scenarios"]
+    },
+    "prd": {
+      "id": "PRD-EXIT-001",
+      "product_name": "Exit Modeler",
+      "summary": "Client-only SPA for Monte Carlo SaaS valuation with policy-based exit guidance.",
+      "goals": [
+        "Edit parameters and instantly re-simulate",
+        "Visualize MRR/ARR, valuation distributions, savings/profit-take",
+        "Define milestone targets and decision policies; see recommended sell points",
+        "Model exit modes (M&A vs IPO) with slider-driven allocations"
+      ],
+      "scope": {
+        "in_scope": [
+          "Growth, churn, ARPU with variance; years to simulate",
+          "Profit-taking rate and cadence; opex/capex % of revenue; taxes",
+          "Valuation multipliers (range/distribution) and sale timing sweeps",
+          "Exit modes: M&A (founder keep vs obligations/retention) and IPO (sell-down vs retained, underwriting fee)",
+          "Charts: MRR/ARR, cumulative savings, valuation by date, fan charts, sale timing sweep",
+          "Monte Carlo auto-run on parameter change",
+          "Export/import settings JSON",
+          "Backtesting with historical CSV",
+          "CAC/LTV & Payback overlay",
+          "M&A terms: escrow, earn-out, transaction costs, working capital adjustment"
+        ],
+        "out_of_scope": ["Persistent accounts/auth (MVP)", "Jurisdictional tax modeling", "Financing rounds beyond IPO event"]
+      },
+      "personas": [
+        { "name": "Founder (Solo/Small Team)", "needs": ["Quick ‘what if’ without spreadsheets", "Clear ‘sell now or hold’"] },
+        { "name": "Operator/CFO", "needs": ["Sensitivity analysis", "Milestone tracking vs required path"] }
+      ]
+    },
+    "features": [
+      {
+        "id": "F00013",
+        "name": "Universal Controls: Slider + Numeric Entry",
+        "status": "approved",
+        "domain": "enablement",
+        "capability_key": "ux_controls",
+        "problem_statement": "All parameters need fast coarse tuning (slider) and precise entry (number field) with full accessibility.",
+        "business_value": "Speed + precision; reduces friction and errors.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "sliders and numeric boxes for every parameter", "so_that": "I can tweak quickly and type exact values" }
+        ],
+        "acceptance_criteria": [
+          "Every numeric parameter is rendered as a slider and a numeric input in one control group; they stay in sync.",
+          "Keyboard, mouse, and touch supported; Arrow adjusts by step; Shift+Arrow = 10× step.",
+          "Validation shows inline messages; out-of-range values are clamped and highlighted until corrected.",
+          "Units displayed inline (%, $, months, trials); money auto-formats with compact option (e.g., $12.3M).",
+          "Debounce updates to simulation: 250ms after slider drag stops or immediately on Enter in numeric field.",
+          "Reset-to-default and show-default chips for each control.",
+          "A11y: labeled controls with aria attributes; WCAG 2.1 AA contrast; full tab order.",
+          "Interest/APR displayed with 1-decimal precision; monetary controls spanning >10× range use logarithmic sliders with numeric entry."
+        ],
+        "metrics": [ { "name": "First-change-to-recompute latency (p95)", "target": "< 250ms" } ],
+        "dependencies": [],
+        "linked_objectives": ["OBJ-003"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00015",
+        "name": "Controls Layout & Logical Grouping",
+        "status": "approved",
+        "domain": "enablement",
+        "capability_key": "ux_groups",
+        "problem_statement": "Parameters must be discoverable and cognitively grouped.",
+        "business_value": "Faster setup; fewer errors.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "parameters grouped into logical sections", "so_that": "I can find what I need fast" }
+        ],
+        "acceptance_criteria": [
+          "Groups (accordion or tabs): 1) Horizon & Engine, 2) Revenue Model (growth/churn/ARPU), 3) Costs & Profit-Take (opex/capex/profit tax/APR), 4) Valuation & Sale (multipliers, haircut, sale type & allocations), 5) Policy & Milestones (set points, band, thresholds), 6) Output Controls (formatting, precision).",
+          "Monetary sliders that span >10× range (e.g., milestones) are logarithmic; provide numeric field for exact values.",
+          "Interest/APR shows and accepts 1-decimal precision; rounds on blur."
+        ],
+        "metrics": [ { "name": "Parameter findability (UX test)", "target": ">= 90% success under 5s" } ],
+        "dependencies": ["F00013"],
+        "linked_objectives": ["OBJ-003"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00001",
+        "name": "Parameter Panel & Presets",
+        "status": "approved",
+        "domain": "analytics",
+        "capability_key": "params_editor",
+        "problem_statement": "Users need to set realistic ranges quickly without expert stats knowledge.",
+        "business_value": "Time-to-first-simulation under 30s increases activation.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "presets for early, mid, late stage", "so_that": "I can start with sane defaults" },
+          { "as_a": "operator", "i_want": "min/base/max inputs with variance type", "so_that": "I can reflect uncertainty" }
+        ],
+        "acceptance_criteria": [
+          "Supports Normal, Lognormal, Beta, Triangular.",
+          "Default horizon = 60 months; default trials = 10000.",
+          "User can set simulation length explicitly: 1–240 months (step 1) via slider + numeric input.",
+          "All numeric parameters use Universal Controls (F00013).",
+          "Slider ranges & steps (editable via config): {\"horizon_months\":{\"min\":1,\"max\":240,\"step\":1},\"trials\":{\"min\":1000,\"max\":100000,\"step\":1000},\"growth_mean_pct_mo\":{\"min\":-10,\"max\":20,\"step\":0.1},\"growth_sigma_pct\":{\"min\":0,\"max\":50,\"step\":0.1},\"churn_pct_mo\":{\"min\":0,\"max\":25,\"step\":0.1},\"arpu_usd\":{\"min\":0,\"max\":1000,\"step\":1},\"opex_pct_revenue\":{\"min\":0,\"max\":100,\"step\":0.5},\"capex_pct_revenue\":{\"min\":0,\"max\":100,\"step\":0.5},\"profit_take_pct\":{\"min\":0,\"max\":100,\"step\":0.5},\"savings_apr_pct\":{\"min\":0,\"max\":20,\"step\":0.1},\"multiplier\":{\"min\":1,\"max\":50,\"step\":0.1},\"multiplier_haircut_pct\":{\"min\":0,\"max\":50,\"step\":0.5},\"policy_band_pct\":{\"min\":0,\"max\":100,\"step\":1},\"tax_rate_profit_pct\":{\"min\":0,\"max\":60,\"step\":0.5},\"tax_rate_sale_pct\":{\"min\":0,\"max\":60,\"step\":0.5},\"holdback_pct\":{\"min\":0,\"max\":50,\"step\":0.5},\"founder_ownership_pct\":{\"min\":0,\"max\":100,\"step\":0.5}}",
+          "Default milestones: $12.3M, $250M, $2.5B; milestone sliders are logarithmic with numeric entry."
+        ],
+        "metrics": [ { "name": "Activation time (median)", "target": "< 30s" } ],
+        "dependencies": ["F00013","F00015"],
+        "linked_objectives": ["OBJ-001"],
+        "related_adrs": ["ADR-0002","ADR-0003"]
+      },
+      {
+        "id": "F00002",
+        "name": "Monte Carlo Engine (Client)",
+        "status": "approved",
+        "domain": "analytics",
+        "capability_key": "mc_engine",
+        "problem_statement": "Deterministic calculators miss tails and compounding effects.",
+        "business_value": "Stochastic results improve decision quality.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "results to update on change", "so_that": "I see impact immediately" },
+          { "as_a": "operator", "i_want": "configurable trials", "so_that": "I can balance speed vs precision" }
+        ],
+        "acceptance_criteria": [
+          "N trials default 10,000; min 1k, max 100k.",
+          "Runs in Web Worker; UI remains responsive.",
+          "Seedable RNG for reproducible runs."
+        ],
+        "metrics": [ { "name": "p95 runtime for 10k trials", "target": "< 250ms on M2-class laptop" } ],
+        "dependencies": ["F00001"],
+        "linked_objectives": ["OBJ-001"],
+        "related_adrs": ["ADR-0001","ADR-0002"]
+      },
+      {
+        "id": "F00003",
+        "name": "Sell/Hold Policy & Milestones (Set-Point + Band)",
+        "status": "approved",
+        "domain": "enablement",
+        "capability_key": "policy_engine",
+        "problem_statement": "Founders need a practical, editable required path with tolerance bands to enforce discipline.",
+        "business_value": "Codifies exits; reduces emotional decisions.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "monthly set points with smoothing", "so_that": "I can shape a target path easily" },
+          { "as_a": "operator", "i_want": "± band around the path", "so_that": "I can set tolerance before triggering SELL" }
+        ],
+        "acceptance_criteria": [
+          "User may add any number of monthly set points (default: a point every 12 months).",
+          "Required path is computed by smoothing between set points (piecewise-linear or monotone cubic spline).",
+          "User sets a symmetric ±% policy band around the required path (default ±20%).",
+          "Default milestones: $12.3M, $250M, $2.5B valuation checkpoints (log sliders with numeric entry).",
+          "At each month, compute median simulated ARR path; if median falls below lower band at/after a milestone, flag SELL; if within/above band, HOLD.",
+          "Respect user-selected simulation length.",
+          "Surface the next milestone’s projected first-crossing month and associated LiquidCash_s from F00012."
+        ],
+        "metrics": [ { "name": "Policy adoption", "target": ">= 70% of active users" } ],
+        "dependencies": ["F00002","F00005","F00012"],
+        "linked_objectives": ["OBJ-002"],
+        "related_adrs": ["ADR-0003"]
+      },
+      {
+        "id": "F00004",
+        "name": "Charts & Fan Plots",
+        "status": "approved",
+        "domain": "analytics",
+        "capability_key": "charts_core",
+        "problem_statement": "Users need intuitive visuals for central tendency and risk.",
+        "business_value": "Faster insight; fewer misreads.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "MRR/ARR charts with bands", "so_that": "I see spread and trend" },
+          { "as_a": "operator", "i_want": "valuation and savings charts", "so_that": "I see time to milestones" }
+        ],
+        "acceptance_criteria": [
+          "Mean/median path with 50/80/95% bands.",
+          "Distribution histogram at selected dates.",
+          "Hover and click-to-pin inspection: any month shows exact values (MRR, ARR, valuation, savings, LiquidCash_s, policy state, milestone proximity).",
+          "Pinned inspector mirrors units/formatting from Universal Controls; includes ‘Jump to month’.",
+          "Add 'Sale Timing Sweep' chart: X = sale month; Y = expected LiquidCash if sold that month (median with 50/80% bands). Uses current Sale Type and (if M&A) deal terms.",
+          "Export PNG/SVG."
+        ],
+        "metrics": [ { "name": "Chart render time (p95)", "target": "< 120ms for 5 series" } ],
+        "dependencies": ["F00002","F00013"],
+        "linked_objectives": ["OBJ-001"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00005",
+        "name": "Valuation Module",
+        "status": "approved",
+        "domain": "analytics",
+        "capability_key": "valuation",
+        "problem_statement": "ARR × multiplier dynamics vary by scenario.",
+        "business_value": "Realistic sale windows and comps-like spreads.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "multipliers by stage", "so_that": "I can bracket valuation" },
+          { "as_a": "operator", "i_want": "haircut/spread", "so_that": "I can model negotiation uncertainty" }
+        ],
+        "acceptance_criteria": [
+          "Support fixed or range multipliers with optional distribution.",
+          "Compute valuation paths monthly for each trial.",
+          "Mark milestone valuations and SELL/HOLD tags."
+        ],
+        "metrics": [ { "name": "Valuation calc correctness", "target": "Unit tests 100% core logic" } ],
+        "dependencies": ["F00002"],
+        "linked_objectives": ["OBJ-001","OBJ-002"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00006",
+        "name": "Profit Take & Cash Accumulation",
+        "status": "approved",
+        "domain": "analytics",
+        "capability_key": "profit_take",
+        "problem_statement": "Users want to siphon profits at cadence while tracking runway.",
+        "business_value": "Connects simulated ops to personal liquidity goals.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "monthly profit-take % after opex/capex", "so_that": "I can see cumulative savings" },
+          { "as_a": "operator", "i_want": "optional interest/yield on savings", "so_that": "I can include compounding" }
+        ],
+        "acceptance_criteria": [
+          "Apply opex/capex as % of revenue prior to profit-take.",
+          "Track cumulative savings with optional APR (1-decimal precision).",
+          "Expose series to charts/exports."
+        ],
+        "metrics": [ { "name": "Cash flow calc correctness", "target": "Unit tests across edge cases" } ],
+        "dependencies": ["F00001","F00002","F00013"],
+        "linked_objectives": ["OBJ-001"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00012",
+        "name": "KPI Big Numbers & Threshold Sale Calculator",
+        "status": "approved",
+        "domain": "analytics",
+        "capability_key": "kpi_panel",
+        "problem_statement": "Users want a single, unambiguous read on proceeds if they sell at key thresholds or specific months.",
+        "business_value": "Removes spreadsheet detours; anchors decisions.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "big-number readouts for sale proceeds at each threshold", "so_that": "I can decide when to sell" },
+          { "as_a": "operator", "i_want": "to click any point on the chart and see the exact proceeds formula applied", "so_that": "I can sanity-check assumptions" }
+        ],
+        "acceptance_criteria": [
+          "Expose parameters: tax_rate_profit (default 25%), tax_rate_sale (default 20%), sale_haircut_pct (default 0%), holdback_pct (default 10%).",
+          "Let users define valuation thresholds (defaults: $12.3M, $250M, $2.5B; log sliders with numeric entry).",
+          "For any selected month s, display: MRR_s, ARR_s, median valuation_s, MoneySaved_net_s, and LiquidCash_s per sale type.",
+          "When a threshold is first met (median EV crosses), show a locked KPI card for that threshold with the computed proceeds.",
+          "KPI panel updates live with parameter changes and simulation horizon."
+        ],
+        "metrics": [
+          { "name": "Time-to-KPI after parameter change (p95)", "target": "< 200ms" },
+          { "name": "User comprehension (survey)", "target": ">= 90% formula clarity" }
+        ],
+        "dependencies": ["F00002","F00004","F00005","F00006","F00014","F00016","F00017"],
+        "linked_objectives": ["OBJ-001","OBJ-002"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00014",
+        "name": "Sale Type & Equity Proceeds (M&A vs IPO)",
+        "status": "approved",
+        "domain": "analytics",
+        "capability_key": "sale_type",
+        "problem_statement": "Founders need realistic modeling of proceeds under full sale vs IPO.",
+        "business_value": "Improves decision quality and timing.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "toggle between M&A and IPO", "so_that": "I can see different cash outcomes" },
+          { "as_a": "operator", "i_want": "sliders for founder keep, obligations/retention (M&A) or sell-down/retained (IPO)", "so_that": "I can mirror real deal structures" }
+        ],
+        "acceptance_criteria": [
+          "Sale type selector with two modes: 'M&A' and 'IPO'.",
+          "M&A controls: founder_keep_pct (default 70%), obligations_retention_pct (default 30%); both apply to net sale proceeds after sale tax and holdback. Validation ensures keep% + obligations% ≤ 100%.",
+          "IPO controls: ipo_sell_down_pct (default 10%), ipo_retained_pct (default 90%); retained equity is not counted as immediate liquid cash.",
+          "Formulas (displayed in info tooltip): EV_s = ARR_s × Multiplier_s × (1 - sale_haircut_pct); EV_net_s = EV_s × (1 - tax_rate_sale) × (1 - holdback_pct); M&A LiquidCash_s = MoneySaved_net_s + (EV_net_s × founder_keep_pct); IPO LiquidCash_s = MoneySaved_net_s + (EV_s × ipo_sell_down_pct × (1 - tax_rate_sale)).",
+          "KPI panel and chart inspectors must update LiquidCash_s according to selected sale type."
+        ],
+        "metrics": [ { "name": "Configuration errors surfaced (per session)", "target": "< 1.0 median" } ],
+        "dependencies": ["F00005","F00006","F00012","F00013","F00015","F00017"],
+        "linked_objectives": ["OBJ-001","OBJ-002"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00016",
+        "name": "CAC/LTV & Payback Overlay (Lite)",
+        "status": "approved",
+        "domain": "analytics",
+        "capability_key": "unit_econ_overlay",
+        "problem_statement": "Founders need a quick sanity-check on unit economics without building a full CAC model.",
+        "business_value": "Highlights whether growth assumptions make economic sense; guards against scaling loss-making acquisition.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "simple CAC/LTV sliders and a payback readout", "so_that": "I can verify growth is profitable" },
+          { "as_a": "operator", "i_want": "to overlay payback on charts", "so_that": "I can gate spend if payback exceeds a threshold" }
+        ],
+        "acceptance_criteria": [
+          "Controls (F00013): cac_usd (default 200), gross_margin_pct (default 80%), payback_guardrail_months (default 18).",
+          "Compute monthly churn rate c from model inputs; if only GRR/NRR are set, derive c from them where possible.",
+          "Compute LTV_months = (ARPU_usd × (gross_margin_pct/100)) / c (cap at 120 months for display).",
+          "Compute PaybackMonths = cac_usd / (ARPU_usd × (gross_margin_pct/100)).",
+          "Overlay: show PaybackMonths marker on timeline and tint chart regions where PaybackMonths > payback_guardrail_months.",
+          "Tooltip/inspector shows CAC, LTV (in $ and months), and PaybackMonths at the pinned point.",
+          "All client-side; no identities or external data."
+        ],
+        "metrics": [
+          { "name": "Overlay render time (p95)", "target": "< 20ms" },
+          { "name": "Guardrail adherence (opt-in telemetry)", "target": ">= 70% runs under threshold" }
+        ],
+        "dependencies": ["F00001","F00004","F00013"],
+        "linked_objectives": ["OBJ-001","OBJ-002"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00017",
+        "name": "M&A Deal Terms Pack",
+        "status": "approved",
+        "domain": "analytics",
+        "capability_key": "ma_terms",
+        "problem_statement": "M&A proceeds are rarely 100% cash at close—escrows, earn-outs, and adjustments matter.",
+        "business_value": "Improves realism of Liquid Cash timing and reduces surprise at close.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "sliders for escrow, earn-out, and transaction costs", "so_that": "I can see realistic proceeds at and after close" },
+          { "as_a": "operator", "i_want": "working capital and fees modeled", "so_that": "I can present board-ready numbers" }
+        ],
+        "acceptance_criteria": [
+          "Mode: applies when Sale Type is 'M&A' (F00014).",
+          "Controls (F00013): transaction_costs_pct_of_EV (default 2%), working_cap_adjustment_pct_of_EV (default -1%), escrow_pct_of_EV (default 10%), escrow_release_months (default 12), earnout_pct_of_EV (default 10%), earnout_probability_pct (default 50%), earnout_release_months (default 24).",
+          "Net EV at close before founder allocation: EV_close_net = (EV_s × (1 - sale_haircut_pct)) × (1 - tax_rate_sale) × (1 - holdback_pct) - EV_s × (transaction_costs_pct_of_EV/100) - EV_s × (working_cap_adjustment_pct_of_EV/100).",
+          "Escrow at close: Escrow_hold = EV_s × (escrow_pct_of_EV/100); released linearly over escrow_release_months after close.",
+          "Earn-out expected value: Earnout_exp = EV_s × (earnout_pct_of_EV/100) × (earnout_probability_pct/100); paid linearly over earnout_release_months starting at month s+1.",
+          "Immediate distributable at close = max(EV_close_net - Escrow_hold, 0). This amount then flows through founder_keep vs obligations/retention split (F00014).",
+          "LiquidCash_s (M&A) now = MoneySaved_net_s + FounderCash_at_close + ReleasedEscrow_to_date + Earnout_paid_to_date.",
+          "KPI cards show Immediate Cash at Close, Escrow Schedule, Earn-out Expected; add a 'Cash Timeline' sparkline for releases."
+        ],
+        "metrics": [
+          { "name": "Proceeds calc regressions", "target": "0 in CI" },
+          { "name": "User comprehension (survey)", "target": ">= 85% say outputs match expectations" }
+        ],
+        "dependencies": ["F00005","F00006","F00012","F00014","F00013"],
+        "linked_objectives": ["OBJ-001","OBJ-002"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00007",
+        "name": "Export/Import Settings",
+        "status": "approved",
+        "domain": "enablement",
+        "capability_key": "settings_io",
+        "problem_statement": "Users need portability without accounts.",
+        "business_value": "Share scenarios between devices/people.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "download settings as JSON", "so_that": "I can archive and share" },
+          { "as_a": "operator", "i_want": "import JSON", "so_that": "I can reload scenarios" }
+        ],
+        "acceptance_criteria": [
+          "Deterministic schema versioning.",
+          "Validation + graceful migration if fields change."
+        ],
+        "metrics": [ { "name": "Import success rate", "target": ">= 99% valid files" } ],
+        "dependencies": [],
+        "linked_objectives": ["OBJ-003"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00008",
+        "name": "Performance & Determinism Harness",
+        "status": "proposed",
+        "domain": "enablement",
+        "capability_key": "perf_test",
+        "problem_statement": "Stochastic systems still need reproducible tests.",
+        "business_value": "Trust and correctness.",
+        "user_stories": [
+          { "as_a": "developer", "i_want": "seeded runs and golden outputs", "so_that": "I can detect regressions" }
+        ],
+        "acceptance_criteria": [
+          "Seed control for engine.",
+          "Golden test corpus in CI."
+        ],
+        "metrics": [ { "name": "CI time", "target": "< 2m for full suite" } ],
+        "dependencies": ["F00002"],
+        "linked_objectives": ["OBJ-001"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00009",
+        "name": "Sensitivity & Tornado Charts",
+        "status": "proposed",
+        "domain": "analytics",
+        "capability_key": "sensitivity",
+        "problem_statement": "Users want to know which inputs drive valuation variance.",
+        "business_value": "Focus on the biggest levers.",
+        "user_stories": [
+          { "as_a": "operator", "i_want": "ranked driver bars", "so_that": "I can prioritize actions" },
+          { "as_a": "founder", "i_want": "one-click scenario pins", "so_that": "I can compare optimistic/base/pessimistic" }
+        ],
+        "acceptance_criteria": [
+          "Compute partial sensitivities via local perturbation or Sobol-lite.",
+          "Render tornado chart; allow pinning to scenarios."
+        ],
+        "metrics": [ { "name": "Sensitivity calc time", "target": "< 300ms incremental" } ],
+        "dependencies": ["F00002","F00004"],
+        "linked_objectives": ["OBJ-001"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00010",
+        "name": "Backtesting & History Import",
+        "status": "proposed",
+        "domain": "analytics",
+        "capability_key": "backtest",
+        "problem_statement": "Users need to evaluate policy against their own history.",
+        "business_value": "Increases trust in policy recommendations.",
+        "user_stories": [
+          { "as_a": "operator", "i_want": "import monthly history CSV", "so_that": "I can fit parameters and replay" },
+          { "as_a": "founder", "i_want": "policy replay outcomes", "so_that": "I can see if SELL/HOLD would have triggered" }
+        ],
+        "acceptance_criteria": [
+          "CSV schema for history (month, MRR/ARR, churn, ARPU).",
+          "Parameter fitting helper (simple MLE/least-squares).",
+          "Replay with same policy and visualize counterfactual exits."
+        ],
+        "metrics": [ { "name": "Import-to-result flow time", "target": "< 60s for new users" } ],
+        "dependencies": ["F00001","F00002","F00003","F00004"],
+        "linked_objectives": ["OBJ-002"],
+        "related_adrs": []
+      },
+      {
+        "id": "F00011",
+        "name": "Defaults & Presets Catalog",
+        "status": "proposed",
+        "domain": "enablement",
+        "capability_key": "defaults_catalog",
+        "problem_statement": "Sensible defaults accelerate adoption.",
+        "business_value": "Lower friction; consistent modeling.",
+        "user_stories": [
+          { "as_a": "founder", "i_want": "stage-based presets", "so_that": "I can get useful results quickly" }
+        ],
+        "acceptance_criteria": [
+          "Early-stage: growth ~ Lognormal(mean 6%/mo, σ 8%), churn ~ Beta(α 2.5, β 50), ARPU ~ Lognormal($20 median, σ 15%).",
+          "Mid-stage: growth ~ Lognormal(3%/mo, σ 4%), churn ~ Beta(α 4, β 120), ARPU ~ Lognormal($30 median, σ 10%).",
+          "Late-stage: growth ~ Lognormal(1.5%/mo, σ 2.5%), churn ~ Beta(α 6, β 220), ARPU ~ Lognormal($40 median, σ 6%).",
+          "Default policy band = ±20%; default milestones = $12.3M, $250M, $2.5B.",
+          "Defaults are editable and saved in the exported settings."
+        ],
+        "metrics": [ { "name": "Preset usage rate", "target": "> 60% of first sessions" } ],
+        "dependencies": ["F00001","F00003","F00005"],
+        "linked_objectives": ["OBJ-001","OBJ-002"],
+        "related_adrs": ["ADR-0002","ADR-0003"]
+      },
+      {
+        "id": "F00018",
+        "name": "PWA Offline & Local-Only Mode",
+        "status": "approved",
+        "domain": "enablement",
+        "capability_key": "pwa_offline",
+        "acceptance_criteria": [
+          "Installable PWA with service worker caching all static assets.",
+          "No external network requests in MVP (lint gate fails on fetch/XHR).",
+          "All simulations execute in a Web Worker; optional WASM path auto-detected.",
+          "Export/import settings JSON; nothing stored remotely."
+        ],
+        "metrics": [
+          { "name": "Offline cold open success", "target": ">= 99%" },
+          { "name": "Bundle (gz)", "target": "<= 350 KB" }
+        ],
+        "dependencies": ["F00001","F00002","F00007","F00013"],
+        "linked_objectives": ["OBJ-003"],
+        "related_adrs": ["ADR-0004"]
+      }
+    ]
+  },
+  "standards": {
+    "delivery": {
+      "title": "Delivery & Review Standards",
+      "workflow": [
+        { "step": "Design", "details": "Define distributions, policy semantics, chart specs, defaults/presets, exit mode formulas, M&A terms, CAC/LTV overlay." },
+        { "step": "Build", "details": "Implement param panel, MC engine, charts, valuation, policy & band, sale type logic, M&A terms, CAC/LTV overlay, PWA." },
+        { "step": "Test", "details": "Deterministic seeds + golden corpus + UI perf budgets; unit tests for proceeds formulas and overlays." },
+        { "step": "Review", "details": "Product/Architecture/Security sign-off." },
+        { "step": "Release", "details": "Tag, changelog, publish static build." }
+      ],
+      "reviews": {
+        "required": [
+          { "role": "Product Lead" },
+          { "role": "Architecture Lead" },
+          { "role": "Security Lead" },
+          { "role": "Compliance Lead" }
+        ],
+        "checklist": [
+          { "item": "No PII collected; no network calls for MVP" },
+          { "item": "Bundle < 350KB gz (goal)" },
+          { "item": "Monte Carlo p95 runtime under target" },
+          { "item": "Charts readable for color-blind users" },
+          { "item": "All math units documented and tested" },
+          { "item": "All numeric parameters implement F00013 (slider + numeric input)" },
+          { "item": "Monetary controls that span >10× are logarithmic; numeric entry allowed" },
+          { "item": "APR and interest controls display 1-decimal precision" },
+          { "item": "Sale type logic (M&A vs IPO) validated against unit tests and examples" },
+          { "item": "M&A terms pack correctly affects LiquidCash timeline and KPI cards" },
+          { "item": "CAC/LTV & Payback overlay renders fast and matches formulas" },
+          { "item": "PWA offline works; no external requests" }
+        ]
+      }
+    }
+  }
+}
