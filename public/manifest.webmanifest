@@ -1,0 +1,16 @@
+{
+  "name": "SaaS Exit Modeler",
+  "short_name": "Exit Modeler",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f62fe",
+  "theme_color": "#0f62fe",
+  "description": "Monte Carlo powered SaaS exit simulator with offline-first policy guidance.",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
