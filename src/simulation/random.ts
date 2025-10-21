@@ -19,7 +19,7 @@ export const sampleLogNormal = (rng: RNG, mean: number, sigma: number): number =
 };
 
 export const sampleBeta = (rng: RNG, alpha: number, beta: number): number => {
-  const sampleGamma = (shape: number) => {
+  const sampleGamma = (shape: number): number => {
     if (shape < 1) {
       const u = rng();
       return sampleGamma(shape + 1) * Math.pow(u, 1 / shape);
