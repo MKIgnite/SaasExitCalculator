@@ -7,8 +7,8 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM python:3.11-alpine AS production
-WORKDIR /app
-COPY --from=build /app/dist ./dist
+FROM nginx:1.27-alpine AS production
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 2782
-CMD ["python", "-m", "http.server", "2782", "--bind", "0.0.0.0", "--directory", "/app/dist"]
+CMD ["nginx", "-g", "daemon off;"]
