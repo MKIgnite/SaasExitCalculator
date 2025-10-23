@@ -12,6 +12,8 @@ export interface SliderInputProps {
   suffix?: string;
   scale?: 'linear' | 'log';
   sliderStep?: number;
+  inputScale?: number;
+  inputPrecision?: number;
 }
 
 const SliderInput: React.FC<SliderInputProps> = ({
@@ -26,7 +28,11 @@ const SliderInput: React.FC<SliderInputProps> = ({
   suffix,
   scale = 'linear',
   sliderStep,
+  inputScale = 1,
+  inputPrecision = 6,
 }) => {
+  const isLinearScale = scale === 'linear';
+
   const clampValue = (next: number) => {
     if (Number.isNaN(next)) return value;
     if (next < min) return min;
@@ -59,20 +65,38 @@ const SliderInput: React.FC<SliderInputProps> = ({
 
   const handleSliderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const sliderValue = Number(event.target.value);
-    const next = clampValue(fromSliderValue(sliderValue));
+    const baseSliderValue = isLinearScale ? sliderValue / inputScale : sliderValue;
+    const next = clampValue(fromSliderValue(baseSliderValue));
     onChange(applyStep(next));
   };
 
   const handleNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const numericValue = clampValue(Number(event.target.value));
+    const numericValue = clampValue(
+      isLinearScale ? Number(event.target.value) / inputScale : Number(event.target.value)
+    );
     onChange(applyStep(numericValue));
   };
 
-  const sliderMin = scale === 'log' ? Math.log10(min) : min;
-  const sliderMax = scale === 'log' ? Math.log10(max) : max;
-  const sliderValue = toSliderValue(value);
-  const sliderStepValue =
-    sliderStep ?? (scale === 'log' ? (sliderMax - sliderMin) / 120 : step);
+  const sliderMinBase = scale === 'log' ? Math.log10(min) : min;
+  const sliderMaxBase = scale === 'log' ? Math.log10(max) : max;
+  const sliderValueBase = toSliderValue(value);
+  const sliderMin = isLinearScale ? sliderMinBase * inputScale : sliderMinBase;
+  const sliderMax = isLinearScale ? sliderMaxBase * inputScale : sliderMaxBase;
+  const sliderValue = isLinearScale ? sliderValueBase * inputScale : sliderValueBase;
+  const sliderStepValue = (() => {
+    if (sliderStep !== undefined) {
+      return sliderStep * (isLinearScale ? inputScale : 1);
+    }
+    if (scale === 'log') {
+      return (sliderMaxBase - sliderMinBase) / 120;
+    }
+    return step * (isLinearScale ? inputScale : 1);
+  })();
+
+  const numberMin = isLinearScale ? min * inputScale : min;
+  const numberMax = isLinearScale ? max * inputScale : max;
+  const numberStep = step ? step * (isLinearScale ? inputScale : 1) : undefined;
+  const numberValue = isLinearScale ? value * inputScale : value;
 
   return (
     <div className="control-row">
@@ -89,16 +113,21 @@ const SliderInput: React.FC<SliderInputProps> = ({
           value={sliderValue}
           onChange={handleSliderChange}
         />
-        <input
-          type="number"
-          min={min}
-          max={max}
-          step={step}
-          value={Number(value.toFixed(6))}
-          onChange={handleNumberChange}
-          aria-label={`${label} numeric input`}
-        />
-        <span>{format ? format(value) : value.toFixed(2)}{suffix}</span>
+        <div className="slider-input__controls">
+          <input
+            type="number"
+            min={numberMin}
+            max={numberMax}
+            step={numberStep}
+            value={Number(numberValue.toFixed(inputPrecision))}
+            onChange={handleNumberChange}
+            aria-label={`${label} numeric input`}
+          />
+          <span>
+            {format ? format(value) : value.toFixed(2)}
+            {suffix ?? ''}
+          </span>
+        </div>
       </div>
     </div>
   );
