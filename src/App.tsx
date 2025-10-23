@@ -159,11 +159,17 @@ const App: React.FC = () => {
     let nextParams: SimulationParameters | null = null;
     setFormParameters((prev) => {
       const next: SimulationParameters = { ...prev, ...partial };
+      if (next.months < 0) {
+        next.months = 0;
+      }
       if (partial.months !== undefined && next.exitMonth > partial.months) {
         next.exitMonth = partial.months;
       }
       if (partial.exitMonth !== undefined && partial.exitMonth > next.months) {
         next.exitMonth = next.months;
+      }
+      if (next.exitMonth < 0) {
+        next.exitMonth = 0;
       }
       if (partial.milestoneTargets !== undefined) {
         next.milestoneTargets = [...partial.milestoneTargets].sort((a, b) => a - b);
@@ -395,8 +401,8 @@ const App: React.FC = () => {
             <div className="controls-grid">
               <SliderInput
                 label="Initial MRR"
-                description="Baseline monthly recurring revenue"
-                min={10_000}
+                description="Starting monthly recurring revenue today"
+                min={0}
                 max={1_000_000}
                 value={formParameters.initialMrr}
                 onChange={(value) => updateParameters({ initialMrr: value })}
@@ -414,8 +420,8 @@ const App: React.FC = () => {
                 format={(value) => currencyFormatter.format(value)}
               />
               <SliderInput
-                label="Base Growth Mean"
-                description="Avg monthly growth (pre-uncertainty)"
+                label="Average Monthly Growth"
+                description="Expected monthly growth rate before randomness"
                 min={0}
                 max={0.2}
                 step={0.005}
@@ -427,7 +433,7 @@ const App: React.FC = () => {
               />
               <SliderInput
                 label="Growth Volatility"
-                description="Lognormal sigma of monthly growth"
+                description="How much monthly growth can swing"
                 min={0}
                 max={0.3}
                 step={0.005}
@@ -445,8 +451,8 @@ const App: React.FC = () => {
             <div className="controls-grid">
               <SliderInput
                 label="Churn Alpha"
-                description="Controls churn distribution shape"
-                min={1}
+                description="How spiky monthly churn swings are"
+                min={0}
                 max={12}
                 step={0.5}
                 value={formParameters.churnAlpha}
@@ -455,8 +461,8 @@ const App: React.FC = () => {
               />
               <SliderInput
                 label="Churn Beta"
-                description="Controls churn central tendency"
-                min={20}
+                description="Typical monthly churn level"
+                min={0}
                 max={400}
                 step={5}
                 value={formParameters.churnBeta}
@@ -465,10 +471,10 @@ const App: React.FC = () => {
               />
               <SliderInput
                 label="Gross Margin"
-                description="Avg monthly gross margin"
-                min={0.3}
-                max={0.95}
-                step={0.01}
+                description="Share of revenue kept after direct costs"
+                min={0}
+                max={1}
+                step={0.005}
                 value={Number(formParameters.grossMargin.toFixed(3))}
                 onChange={(value) => updateParameters({ grossMargin: value })}
                 format={(value) => percentFormatter.format(value)}
@@ -477,7 +483,7 @@ const App: React.FC = () => {
               />
               <SliderInput
                 label="Profit Take"
-                description="% of gross profit routed to treasury"
+                description="Percent of gross profit saved for treasury"
                 min={0}
                 max={1}
                 step={0.01}
@@ -489,9 +495,9 @@ const App: React.FC = () => {
               />
               <SliderInput
                 label="Customer Acquisition Cost"
-                description="Fully-loaded CAC per new customer"
-                min={50}
-                max={1500}
+                description="Average cost to acquire a new customer"
+                min={0}
+                max={2_000}
                 value={formParameters.customerAcquisitionCost}
                 onChange={(value) => updateParameters({ customerAcquisitionCost: value })}
                 format={(value) => currencyFormatter.format(value)}
@@ -505,18 +511,18 @@ const App: React.FC = () => {
             <div className="controls-grid">
               <SliderInput
                 label="Months"
-                description="Horizon for the Monte Carlo run"
-                min={24}
+                description="How many months to simulate"
+                min={0}
                 max={120}
-                step={6}
+                step={1}
                 value={formParameters.months}
                 onChange={(value) => updateParameters({ months: value })}
                 format={(value) => `${value}`}
               />
               <SliderInput
                 label="Trials"
-                description="Number of Monte Carlo trials"
-                min={500}
+                description="How many random scenarios to run"
+                min={0}
                 max={20_000}
                 value={formParameters.trials}
                 onChange={(value) => updateParameters({ trials: value })}
@@ -559,8 +565,8 @@ const App: React.FC = () => {
             <div className="controls-grid">
               <SliderInput
                 label="Exit Month"
-                description="Target month to trigger sale"
-                min={12}
+                description="Month when you plan to exit"
+                min={0}
                 max={formParameters.months}
                 step={1}
                 value={formParameters.exitMonth}
@@ -569,8 +575,8 @@ const App: React.FC = () => {
               />
               <SliderInput
                 label="Valuation Multiple"
-                description="ARR multiple applied to enterprise value"
-                min={2}
+                description="Exit enterprise value as a multiple of ARR"
+                min={0}
                 max={20}
                 step={0.5}
                 value={formParameters.valuationMultiple}
@@ -581,8 +587,8 @@ const App: React.FC = () => {
                 label={formParameters.exitStrategy === 'ma' ? 'Escrow Rate' : 'Float Percent'}
                 description={
                   formParameters.exitStrategy === 'ma'
-                    ? 'Portion of consideration held in escrow'
-                    : 'Equity floated at IPO'
+                    ? 'Percent of sale price held in escrow'
+                    : 'Percent of shares sold in the IPO'
                 }
                 min={0}
                 max={1}
@@ -607,8 +613,8 @@ const App: React.FC = () => {
                 <>
                   <SliderInput
                     label="Escrow Release (months)"
-                    description="Months until escrow cash is released"
-                    min={6}
+                    description="Months until escrow cash is paid out"
+                    min={0}
                     max={36}
                     step={1}
                     value={formParameters.escrowMonths}
@@ -617,7 +623,7 @@ const App: React.FC = () => {
                   />
                   <SliderInput
                     label="Earn-out Rate"
-                    description="Portion tied to growth performance"
+                    description="Percent of the deal tied to earn-out"
                     min={0}
                     max={1}
                     step={0.01}
@@ -629,8 +635,8 @@ const App: React.FC = () => {
                   />
                   <SliderInput
                     label="Earn-out Horizon"
-                    description="Months to earn-out measurement"
-                    min={12}
+                    description="Months until the earn-out check-in"
+                    min={0}
                     max={48}
                     step={1}
                     value={formParameters.earnOutMonths}
@@ -639,8 +645,8 @@ const App: React.FC = () => {
                   />
                   <SliderInput
                     label="Earn-out Growth Target"
-                    description="YoY growth to earn full payout"
-                    min={0.05}
+                    description="Growth rate needed for full earn-out"
+                    min={0}
                     max={1}
                     step={0.01}
                     value={Number(formParameters.earnOutGrowthTarget.toFixed(3))}
@@ -654,8 +660,8 @@ const App: React.FC = () => {
                 <>
                   <SliderInput
                     label="Lock-up Months"
-                    description="Months before secondary sell-down"
-                    min={6}
+                    description="Months shares are locked before selling"
+                    min={0}
                     max={24}
                     step={1}
                     value={formParameters.ipoLockupMonths}
@@ -664,7 +670,7 @@ const App: React.FC = () => {
                   />
                   <SliderInput
                     label="Post-lockup Sell-down"
-                    description="Portion of remaining equity sold"
+                    description="Percent of remaining shares sold after lock-up"
                     min={0}
                     max={1}
                     step={0.01}
@@ -676,7 +682,7 @@ const App: React.FC = () => {
                   />
                   <SliderInput
                     label="IPO Discount"
-                    description="Offering discount vs private value"
+                    description="Discount investors demand at IPO"
                     min={0}
                     max={1}
                     step={0.01}
@@ -688,7 +694,7 @@ const App: React.FC = () => {
                   />
                   <SliderInput
                     label="Underwriting Fees"
-                    description="Bank &amp; legal costs as % of proceeds"
+                    description="Bank and legal fees as percent of proceeds"
                     min={0}
                     max={1}
                     step={0.005}
@@ -702,7 +708,7 @@ const App: React.FC = () => {
               )}
               <SliderInput
                 label="Transaction Costs"
-                description="Diligence, advisors, and legal fees"
+                description="Advisor and diligence costs as percent of price"
                 min={0}
                 max={1}
                 step={0.005}
@@ -714,8 +720,8 @@ const App: React.FC = () => {
               />
               <SliderInput
                 label="Working Capital Adjustment"
-                description="Net working capital true-up"
-                min={-1}
+                description="Net working capital adjustment at close"
+                min={0}
                 max={1}
                 step={0.005}
                 value={Number(formParameters.workingCapitalRate.toFixed(3))}
@@ -732,7 +738,7 @@ const App: React.FC = () => {
             <div className="controls-grid">
               <SliderInput
                 label="Policy Band"
-                description="Tolerance against milestone track (±%)"
+                description="Allowed drift from milestone plan (±%)"
                 min={0}
                 max={1}
                 step={0.01}
