@@ -32,6 +32,7 @@ const SliderInput: React.FC<SliderInputProps> = ({
   inputPrecision = 6,
 }) => {
   const isLinearScale = scale === 'linear';
+  const logOffset = !isLinearScale && min <= 0 ? 1 - min : 0;
 
   const clampValue = (next: number) => {
     if (Number.isNaN(next)) return value;
@@ -42,7 +43,7 @@ const SliderInput: React.FC<SliderInputProps> = ({
 
   const toSliderValue = (numericValue: number) => {
     if (scale === 'log') {
-      const safeValue = Math.max(numericValue, Number.EPSILON);
+      const safeValue = Math.max(numericValue + logOffset, Number.EPSILON);
       return Math.log10(safeValue);
     }
     return numericValue;
@@ -50,7 +51,7 @@ const SliderInput: React.FC<SliderInputProps> = ({
 
   const fromSliderValue = (sliderValue: number) => {
     if (scale === 'log') {
-      return Math.pow(10, sliderValue);
+      return Math.pow(10, sliderValue) - logOffset;
     }
     return sliderValue;
   };
@@ -77,8 +78,8 @@ const SliderInput: React.FC<SliderInputProps> = ({
     onChange(applyStep(numericValue));
   };
 
-  const sliderMinBase = scale === 'log' ? Math.log10(min) : min;
-  const sliderMaxBase = scale === 'log' ? Math.log10(max) : max;
+  const sliderMinBase = scale === 'log' ? Math.log10(min + logOffset) : min;
+  const sliderMaxBase = scale === 'log' ? Math.log10(max + logOffset) : max;
   const sliderValueBase = toSliderValue(value);
   const sliderMin = isLinearScale ? sliderMinBase * inputScale : sliderMinBase;
   const sliderMax = isLinearScale ? sliderMaxBase * inputScale : sliderMaxBase;
