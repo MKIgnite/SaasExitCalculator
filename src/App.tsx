@@ -123,10 +123,12 @@ const ratioFormatter = new Intl.NumberFormat('en-US', {
 });
 
 const App: React.FC = () => {
+  const [formParameters, setFormParameters] = useState<SimulationParameters>(DEFAULT_PARAMETERS);
   const [parameters, setParameters] = useState<SimulationParameters>(DEFAULT_PARAMETERS);
   const [activePreset, setActivePreset] = useState<string | null>('mid');
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
   const requestIdRef = useRef(0);
 
   const worker = useMemo(
@@ -150,15 +152,12 @@ const App: React.FC = () => {
     };
   }, [worker]);
 
-  useEffect(() => {
-    const nextRequestId = requestIdRef.current + 1;
-    requestIdRef.current = nextRequestId;
-    setIsRunning(true);
-    worker.postMessage({ type: 'run', requestId: nextRequestId, payload: parameters });
-  }, [parameters, worker]);
-
-  const updateParameters = (partial: Partial<SimulationParameters>) => {
-    setParameters((prev) => {
+  const updateParameters = (
+    partial: Partial<SimulationParameters>,
+    options: { preservePreset?: boolean } = {}
+  ) => {
+    let nextParams: SimulationParameters | null = null;
+    setFormParameters((prev) => {
       const next: SimulationParameters = { ...prev, ...partial };
       if (partial.months !== undefined && next.exitMonth > partial.months) {
         next.exitMonth = partial.months;
@@ -169,20 +168,26 @@ const App: React.FC = () => {
       if (partial.milestoneTargets !== undefined) {
         next.milestoneTargets = [...partial.milestoneTargets].sort((a, b) => a - b);
       }
+      nextParams = next;
       return next;
     });
-    setActivePreset(null);
+    if (!options.preservePreset) {
+      setActivePreset(null);
+    }
+    if (nextParams) {
+      setHasPendingChanges(JSON.stringify(nextParams) !== JSON.stringify(parameters));
+    }
   };
 
   const handlePreset = (presetId: string) => {
     const preset = PRESETS.find((item) => item.id === presetId);
     if (!preset) return;
     setActivePreset(presetId);
-    updateParameters(preset.params);
+    updateParameters(preset.params, { preservePreset: true });
   };
 
   const handleExport = () => {
-    const blob = new Blob([JSON.stringify(parameters, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(formParameters, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -208,20 +213,32 @@ const App: React.FC = () => {
 
   const handleMilestoneChange = (index: number, value: number) => {
     updateParameters({
-      milestoneTargets: parameters.milestoneTargets.map((target, idx) => (idx === index ? value : target)),
+      milestoneTargets: formParameters.milestoneTargets.map((target, idx) => (idx === index ? value : target)),
     });
   };
 
   const addMilestone = () => {
-    updateParameters({ milestoneTargets: [...parameters.milestoneTargets, 1_000_000_000] });
+    updateParameters({ milestoneTargets: [...formParameters.milestoneTargets, 1_000_000_000] });
   };
 
   const removeMilestone = (index: number) => {
-    if (parameters.milestoneTargets.length <= 1) return;
+    if (formParameters.milestoneTargets.length <= 1) return;
     updateParameters({
-      milestoneTargets: parameters.milestoneTargets.filter((_, idx) => idx !== index),
+      milestoneTargets: formParameters.milestoneTargets.filter((_, idx) => idx !== index),
     });
   };
+
+  const runSimulation = () => {
+    setHasPendingChanges(false);
+    setParameters({ ...formParameters });
+  };
+
+  useEffect(() => {
+    const nextRequestId = requestIdRef.current + 1;
+    requestIdRef.current = nextRequestId;
+    setIsRunning(true);
+    worker.postMessage({ type: 'run', requestId: nextRequestId, payload: parameters });
+  }, [parameters, worker]);
 
   const months = result?.mrr.map((series) => `M${series.month}`) ?? [];
 
@@ -381,7 +398,7 @@ const App: React.FC = () => {
                 description="Baseline monthly recurring revenue"
                 min={10_000}
                 max={1_000_000}
-                value={parameters.initialMrr}
+                value={formParameters.initialMrr}
                 onChange={(value) => updateParameters({ initialMrr: value })}
                 format={(value) => currencyFormatter.format(value)}
                 scale="log"
@@ -389,13 +406,12 @@ const App: React.FC = () => {
               <SliderInput
                 label="ARPU"
                 description="Average revenue per paying customer"
-                min={10}
-                max={400}
+                min={0}
+                max={1_000}
                 step={1}
-                value={parameters.arpu}
+                value={formParameters.arpu}
                 onChange={(value) => updateParameters({ arpu: value })}
                 format={(value) => currencyFormatter.format(value)}
-                scale="log"
               />
               <SliderInput
                 label="Base Growth Mean"
@@ -403,9 +419,11 @@ const App: React.FC = () => {
                 min={0}
                 max={0.2}
                 step={0.005}
-                value={Number(parameters.baseGrowthMean.toFixed(4))}
+                value={Number(formParameters.baseGrowthMean.toFixed(4))}
                 onChange={(value) => updateParameters({ baseGrowthMean: value })}
                 format={(value) => percentFormatter.format(value)}
+                inputScale={100}
+                inputPrecision={1}
               />
               <SliderInput
                 label="Growth Volatility"
@@ -413,9 +431,11 @@ const App: React.FC = () => {
                 min={0}
                 max={0.3}
                 step={0.005}
-                value={Number(parameters.growthVolatility.toFixed(4))}
+                value={Number(formParameters.growthVolatility.toFixed(4))}
                 onChange={(value) => updateParameters({ growthVolatility: value })}
                 format={(value) => percentFormatter.format(value)}
+                inputScale={100}
+                inputPrecision={1}
               />
             </div>
           </div>
@@ -429,7 +449,7 @@ const App: React.FC = () => {
                 min={1}
                 max={12}
                 step={0.5}
-                value={parameters.churnAlpha}
+                value={formParameters.churnAlpha}
                 onChange={(value) => updateParameters({ churnAlpha: value })}
                 format={(value) => value.toFixed(1)}
               />
@@ -439,7 +459,7 @@ const App: React.FC = () => {
                 min={20}
                 max={400}
                 step={5}
-                value={parameters.churnBeta}
+                value={formParameters.churnBeta}
                 onChange={(value) => updateParameters({ churnBeta: value })}
                 format={(value) => value.toFixed(0)}
               />
@@ -449,26 +469,30 @@ const App: React.FC = () => {
                 min={0.3}
                 max={0.95}
                 step={0.01}
-                value={Number(parameters.grossMargin.toFixed(3))}
+                value={Number(formParameters.grossMargin.toFixed(3))}
                 onChange={(value) => updateParameters({ grossMargin: value })}
                 format={(value) => percentFormatter.format(value)}
+                inputScale={100}
+                inputPrecision={0}
               />
               <SliderInput
                 label="Profit Take"
                 description="% of gross profit routed to treasury"
                 min={0}
-                max={0.9}
+                max={1}
                 step={0.01}
-                value={Number(parameters.profitTakeRate.toFixed(3))}
+                value={Number(formParameters.profitTakeRate.toFixed(3))}
                 onChange={(value) => updateParameters({ profitTakeRate: value })}
                 format={(value) => percentFormatter.format(value)}
+                inputScale={100}
+                inputPrecision={0}
               />
               <SliderInput
                 label="Customer Acquisition Cost"
                 description="Fully-loaded CAC per new customer"
                 min={50}
                 max={1500}
-                value={parameters.customerAcquisitionCost}
+                value={formParameters.customerAcquisitionCost}
                 onChange={(value) => updateParameters({ customerAcquisitionCost: value })}
                 format={(value) => currencyFormatter.format(value)}
                 scale="log"
@@ -485,7 +509,7 @@ const App: React.FC = () => {
                 min={24}
                 max={120}
                 step={6}
-                value={parameters.months}
+                value={formParameters.months}
                 onChange={(value) => updateParameters({ months: value })}
                 format={(value) => `${value}`}
               />
@@ -494,7 +518,7 @@ const App: React.FC = () => {
                 description="Number of Monte Carlo trials"
                 min={500}
                 max={20_000}
-                value={parameters.trials}
+                value={formParameters.trials}
                 onChange={(value) => updateParameters({ trials: value })}
                 format={(value) => value.toLocaleString()}
                 scale="log"
@@ -507,7 +531,7 @@ const App: React.FC = () => {
                 <div className="text-input">
                   <input
                     type="text"
-                    value={parameters.seed}
+                    value={formParameters.seed}
                     onChange={(event) => updateParameters({ seed: event.target.value })}
                   />
                 </div>
@@ -524,7 +548,7 @@ const App: React.FC = () => {
               </label>
               <div className="text-input">
                 <select
-                  value={parameters.exitStrategy}
+                  value={formParameters.exitStrategy}
                   onChange={(event) => updateParameters({ exitStrategy: event.target.value as SimulationParameters['exitStrategy'] })}
                 >
                   <option value="ma">M&amp;A — escrow &amp; earn-out</option>
@@ -537,9 +561,9 @@ const App: React.FC = () => {
                 label="Exit Month"
                 description="Target month to trigger sale"
                 min={12}
-                max={parameters.months}
+                max={formParameters.months}
                 step={1}
-                value={parameters.exitMonth}
+                value={formParameters.exitMonth}
                 onChange={(value) => updateParameters({ exitMonth: value })}
                 format={(value) => `${value}`}
               />
@@ -549,35 +573,37 @@ const App: React.FC = () => {
                 min={2}
                 max={20}
                 step={0.5}
-                value={parameters.valuationMultiple}
+                value={formParameters.valuationMultiple}
                 onChange={(value) => updateParameters({ valuationMultiple: value })}
                 format={(value) => `${value.toFixed(1)}×`}
               />
               <SliderInput
-                label={parameters.exitStrategy === 'ma' ? 'Escrow Rate' : 'Float Percent'}
+                label={formParameters.exitStrategy === 'ma' ? 'Escrow Rate' : 'Float Percent'}
                 description={
-                  parameters.exitStrategy === 'ma'
+                  formParameters.exitStrategy === 'ma'
                     ? 'Portion of consideration held in escrow'
                     : 'Equity floated at IPO'
                 }
                 min={0}
-                max={parameters.exitStrategy === 'ma' ? 0.3 : 0.5}
+                max={1}
                 step={0.01}
                 value={
-                  parameters.exitStrategy === 'ma'
-                    ? Number(parameters.escrowRate.toFixed(3))
-                    : Number(parameters.ipoFloatPercent.toFixed(3))
+                  formParameters.exitStrategy === 'ma'
+                    ? Number(formParameters.escrowRate.toFixed(3))
+                    : Number(formParameters.ipoFloatPercent.toFixed(3))
                 }
                 onChange={(value) =>
                   updateParameters(
-                    parameters.exitStrategy === 'ma'
+                    formParameters.exitStrategy === 'ma'
                       ? { escrowRate: value }
                       : { ipoFloatPercent: value }
                   )
                 }
                 format={(value) => percentFormatter.format(value)}
+                inputScale={100}
+                inputPrecision={0}
               />
-              {parameters.exitStrategy === 'ma' ? (
+              {formParameters.exitStrategy === 'ma' ? (
                 <>
                   <SliderInput
                     label="Escrow Release (months)"
@@ -585,7 +611,7 @@ const App: React.FC = () => {
                     min={6}
                     max={36}
                     step={1}
-                    value={parameters.escrowMonths}
+                    value={formParameters.escrowMonths}
                     onChange={(value) => updateParameters({ escrowMonths: value })}
                     format={(value) => `${value}`}
                   />
@@ -593,11 +619,13 @@ const App: React.FC = () => {
                     label="Earn-out Rate"
                     description="Portion tied to growth performance"
                     min={0}
-                    max={0.4}
+                    max={1}
                     step={0.01}
-                    value={Number(parameters.earnOutRate.toFixed(3))}
+                    value={Number(formParameters.earnOutRate.toFixed(3))}
                     onChange={(value) => updateParameters({ earnOutRate: value })}
                     format={(value) => percentFormatter.format(value)}
+                    inputScale={100}
+                    inputPrecision={0}
                   />
                   <SliderInput
                     label="Earn-out Horizon"
@@ -605,7 +633,7 @@ const App: React.FC = () => {
                     min={12}
                     max={48}
                     step={1}
-                    value={parameters.earnOutMonths}
+                    value={formParameters.earnOutMonths}
                     onChange={(value) => updateParameters({ earnOutMonths: value })}
                     format={(value) => `${value}`}
                   />
@@ -613,11 +641,13 @@ const App: React.FC = () => {
                     label="Earn-out Growth Target"
                     description="YoY growth to earn full payout"
                     min={0.05}
-                    max={0.6}
+                    max={1}
                     step={0.01}
-                    value={Number(parameters.earnOutGrowthTarget.toFixed(3))}
+                    value={Number(formParameters.earnOutGrowthTarget.toFixed(3))}
                     onChange={(value) => updateParameters({ earnOutGrowthTarget: value })}
                     format={(value) => percentFormatter.format(value)}
+                    inputScale={100}
+                    inputPrecision={0}
                   />
                 </>
               ) : (
@@ -628,7 +658,7 @@ const App: React.FC = () => {
                     min={6}
                     max={24}
                     step={1}
-                    value={parameters.ipoLockupMonths}
+                    value={formParameters.ipoLockupMonths}
                     onChange={(value) => updateParameters({ ipoLockupMonths: value })}
                     format={(value) => `${value}`}
                   />
@@ -636,31 +666,37 @@ const App: React.FC = () => {
                     label="Post-lockup Sell-down"
                     description="Portion of remaining equity sold"
                     min={0}
-                    max={0.6}
+                    max={1}
                     step={0.01}
-                    value={Number(parameters.postLockupSellDown.toFixed(3))}
+                    value={Number(formParameters.postLockupSellDown.toFixed(3))}
                     onChange={(value) => updateParameters({ postLockupSellDown: value })}
                     format={(value) => percentFormatter.format(value)}
+                    inputScale={100}
+                    inputPrecision={0}
                   />
                   <SliderInput
                     label="IPO Discount"
                     description="Offering discount vs private value"
                     min={0}
-                    max={0.25}
+                    max={1}
                     step={0.01}
-                    value={Number(parameters.ipoDiscount.toFixed(3))}
+                    value={Number(formParameters.ipoDiscount.toFixed(3))}
                     onChange={(value) => updateParameters({ ipoDiscount: value })}
                     format={(value) => percentFormatter.format(value)}
+                    inputScale={100}
+                    inputPrecision={0}
                   />
                   <SliderInput
                     label="Underwriting Fees"
                     description="Bank &amp; legal costs as % of proceeds"
                     min={0}
-                    max={0.12}
+                    max={1}
                     step={0.005}
-                    value={Number(parameters.ipoFeesRate.toFixed(3))}
+                    value={Number(formParameters.ipoFeesRate.toFixed(3))}
                     onChange={(value) => updateParameters({ ipoFeesRate: value })}
                     format={(value) => percentFormatter.format(value)}
+                    inputScale={100}
+                    inputPrecision={1}
                   />
                 </>
               )}
@@ -668,21 +704,25 @@ const App: React.FC = () => {
                 label="Transaction Costs"
                 description="Diligence, advisors, and legal fees"
                 min={0}
-                max={0.12}
+                max={1}
                 step={0.005}
-                value={Number(parameters.transactionCostRate.toFixed(3))}
+                value={Number(formParameters.transactionCostRate.toFixed(3))}
                 onChange={(value) => updateParameters({ transactionCostRate: value })}
                 format={(value) => percentFormatter.format(value)}
+                inputScale={100}
+                inputPrecision={1}
               />
               <SliderInput
                 label="Working Capital Adjustment"
                 description="Net working capital true-up"
-                min={-0.1}
-                max={0.1}
+                min={-1}
+                max={1}
                 step={0.005}
-                value={Number(parameters.workingCapitalRate.toFixed(3))}
+                value={Number(formParameters.workingCapitalRate.toFixed(3))}
                 onChange={(value) => updateParameters({ workingCapitalRate: value })}
                 format={(value) => percentFormatter.format(value)}
+                inputScale={100}
+                inputPrecision={1}
               />
             </div>
           </div>
@@ -693,18 +733,20 @@ const App: React.FC = () => {
               <SliderInput
                 label="Policy Band"
                 description="Tolerance against milestone track (±%)"
-                min={0.05}
-                max={0.4}
+                min={0}
+                max={1}
                 step={0.01}
-                value={Number(parameters.policyBand.toFixed(3))}
+                value={Number(formParameters.policyBand.toFixed(3))}
                 onChange={(value) => updateParameters({ policyBand: value })}
                 format={(value) => percentFormatter.format(value)}
+                inputScale={100}
+                inputPrecision={0}
               />
             </div>
             <div className="milestones">
               <label>Milestone Valuations</label>
               <div className="milestone-list">
-                {parameters.milestoneTargets.map((target, index) => (
+                {formParameters.milestoneTargets.map((target, index) => (
                   <div key={index} className="milestone-item">
                     <input
                       type="number"
@@ -713,7 +755,7 @@ const App: React.FC = () => {
                       aria-label={`Milestone ${index + 1}`}
                     />
                     <span>{currencyFormatter.format(target)}</span>
-                    {parameters.milestoneTargets.length > 1 && (
+                    {formParameters.milestoneTargets.length > 1 && (
                       <button type="button" onClick={() => removeMilestone(index)} aria-label="Remove milestone">
                         ×
                       </button>
@@ -730,6 +772,9 @@ const App: React.FC = () => {
           <div className="section actions">
             <h3>Actions</h3>
             <div className="actions">
+              <button type="button" onClick={runSimulation} disabled={isRunning}>
+                {isRunning ? 'Running…' : 'Run Simulation'}
+              </button>
               <button type="button" onClick={handleExport} disabled={isRunning}>
                 Export Settings
               </button>
@@ -737,6 +782,9 @@ const App: React.FC = () => {
                 Import Settings
                 <input type="file" accept="application/json" onChange={handleImport} />
               </label>
+              {hasPendingChanges && !isRunning && (
+                <span className="actions__status">Settings changed — run to refresh results</span>
+              )}
             </div>
           </div>
         </section>
@@ -744,6 +792,9 @@ const App: React.FC = () => {
         <section className="chart-container" aria-live="polite">
           <h2>Forecast Outputs</h2>
           {isRunning && <p>Running simulation…</p>}
+          {!isRunning && hasPendingChanges && result && (
+            <p className="pending-notice">Settings have changed — run the simulation to refresh these results.</p>
+          )}
           {!isRunning && result && (
             <>
               <div className="metrics-grid">
